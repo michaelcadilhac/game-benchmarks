@@ -1,31 +1,37 @@
 #include <iostream>
 
-#include <boost/algorithm/string/replace.hh>
+#include <boost/algorithm/string/replace.hpp>
+
+#include <mpreal.h>
+
+using mpfr::mpreal;
+
+#include <boost/multiprecision/gmp.hpp>
+#include <boost/random.hpp>
+
 #include <random>
 
 //////////////////// Parse options as math expressions, using exprTk and cxxopts
 
-template <typename T>
-class math_expr;
+class mpfr_math_expr;
+class long_math_expr;
 
 namespace cxxopts::values {
-  template <typename T>
-  void parse_value (const std::string& text, math_expr<T>& value) {
-    value.set_value_str (text);
-  }
+  void parse_value (const std::string& text, mpfr_math_expr& value);
+  void parse_value (const std::string& text, long_math_expr& value);
 }
 
 #include "cxxopts.hh"
+#include "exprtk_mpfr_adaptor.hh"
 #include "exprtk.hh"
 
-template <typename T>
-class math_expr {
-    static exprtk::symbol_table<double> symbol_table;
+class mpfr_math_expr {
+    static exprtk::symbol_table<mpreal> symbol_table;
   public:
-    static std::map<std::string, std::reference_wrapper<math_expr>> all_exprs;
+    static std::map<std::string, std::reference_wrapper<mpfr_math_expr>> all_exprs;
 
-    math_expr (const std::string& name = "",
-               const std::string& def = "") : name (name), value_str (def) {
+    mpfr_math_expr (const std::string& name = "",
+                   const std::string& def = "") : name (name), value_str (def) {
       if (not name.empty ()) {
         symbol_table.add_variable (name, value);
         all_exprs.emplace (name, *this);
@@ -39,9 +45,10 @@ class math_expr {
       return value_str;
     }
 
-    T get_value () {
+  protected:
+    mpreal get_value () {
       if (set)
-        return static_cast<T> (value);
+        return value;
 
       if (get_called)
         cxxopts::throw_or_mimic<cxxopts::exceptions::incorrect_argument_type> (value_str);
@@ -57,31 +64,51 @@ class math_expr {
       for (const auto& var : dependencies)
         all_exprs.at (var).get ().get_value ();
 
-      exprtk::expression<double>   expression;
-      exprtk::parser<double>       parser;
+      exprtk::expression<mpreal>   expression;
+      exprtk::parser<mpreal>       parser;
       expression.register_symbol_table (symbol_table);
       if (not parser.compile (value_str, expression))
         cxxopts::throw_or_mimic<cxxopts::exceptions::incorrect_argument_type> (value_str);
       value = expression.value ();
       set = true;
-
-      return static_cast<T> (value);
+      return value;
     }
-
-    operator T () {
+  public:
+    mpreal operator* () {
       return get_value ();
     }
 
+    operator mpreal () {
+      return *(*this);
+    }
   private:
     std::string name;
     std::string value_str;
     bool        set = false, get_called = false;
-    double      value;
+    mpreal      value;
 };
 
-#define instantiate(V) template <> decltype (V) V {}
-instantiate (math_expr<size_t>::symbol_table);
-instantiate (math_expr<size_t>::all_exprs);
+class long_math_expr : public mpfr_math_expr {
+  public:
+    long_math_expr (const std::string& name = "",
+                    const std::string& def = "") : mpfr_math_expr (name, def) { }
+
+    long operator* () {
+      return get_value ().toLong ();
+    }
+
+    operator long () {
+      return *(*this);
+    }
+};
+
+void cxxopts::values::parse_value (const std::string& text, mpfr_math_expr& value) {  value.set_value_str (text); }
+void cxxopts::values::parse_value (const std::string& text, long_math_expr& value) {  value.set_value_str (text); }
+
+#define instantiate(V) decltype (V) V {}
+instantiate (mpfr_math_expr::symbol_table);
+instantiate (mpfr_math_expr::all_exprs);
+
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -98,15 +125,15 @@ void usage (const cxxopts::Options& opts, const std::string& err = "") {
   exit (err.empty () ? 1 : 0);
 }
 
-std::string make_filename (const std::string& filename, const cxxopts::ParseResult& options, size_t i) {
+std::string make_filename (const std::string& filename, const cxxopts::ParseResult& options, long i) {
   auto res { filename };
 
   boost::algorithm::replace_all (res, "{i}", std::to_string (i));
 
   for (const auto& opt : options)
-    if (not math_expr<size_t>::all_exprs.contains (opt.key ()))
+    if (not long_math_expr::all_exprs.contains (opt.key ()))
       boost::algorithm::replace_all (res, "{" + opt.key () + "}", opt.value ());
-  for (const auto& [name, val] : math_expr<size_t>::all_exprs)
+  for (const auto& [name, val] : mpfr_math_expr::all_exprs)
     boost::algorithm::replace_all (res, "{" + name + "}",
                                    val.get ().get_value_str ());
 
@@ -118,11 +145,13 @@ int main (int argc, char** argv) {
 
   cxxopts::Options opts (argv[0], "Generate random games");
 
-  size_t count = 100;
-  math_expr<size_t> size ("size", "100"), maxp ("maxp", "size"),
+  long count = 100;
+  long_math_expr size ("size", "100"),
     edges ("edges", "min (4 * size, size * (size - 1))"),
     outdegree ("outdegree", "undefined"),
     seed ("seed", std::to_string (std::random_device () ()));
+  mpfr_math_expr maxp ("maxp", "size");
+
   bool energy = false, bipartite = true;
 
   opts.custom_help ("[OPTIONS...] [FILE-PATTERN]\n"
@@ -163,9 +192,14 @@ int main (int argc, char** argv) {
   if (options.count ("help")) usage (opts);
 
   std::mt19937 generator (seed);
-  auto rnd = [&] (ssize_t lb, ssize_t ub) {
-    std::uniform_int_distribution<> distrib (lb, ub);
+  auto rnd = [&] (long lb, long ub) {
+    std::uniform_int_distribution distrib (lb, ub);
     return distrib (generator);
+  };
+
+  mpfr::random (seed);
+  auto rnd_mpfr = [&] (mpreal lb, mpreal ub) {
+    return mpfr::random () * (ub - lb + 1) + lb;
   };
 
   auto unmatched = options.unmatched ();
@@ -175,10 +209,10 @@ int main (int argc, char** argv) {
     usage (opts, "outdegree and edges connot both be specified.");
 
   std::streambuf* buf = std::cout.rdbuf ();
-  size_t retries = 0;
+  long retries = 0;
   bool retry = false;
 
-  for (ssize_t i = 0; i < (ssize_t) count; retry or ++i) {
+  for (long i = 0; i < (long) count; retry or ++i) {
     if (retry) {
       retry = false;
       if (++retries > size * size)
@@ -192,23 +226,23 @@ int main (int argc, char** argv) {
     // Generate game
     struct {
         int32_t owner;
-        ssize_t prio;
-        std::set<size_t> succ;
-    } game[size.get_value ()];
+        mpreal prio;
+        std::set<long> succ;
+    } game[*size];
 
     uint8_t has_players = 0b00;
-    for (size_t j = 0; j < size; ++j) {
+    for (long j = 0; j < size; ++j) {
       game[j].owner = rnd (0, 1);
       has_players |= 1 << game[j].owner;
       if (j == size - 1 and has_players != 0b11) // force that the two players are there
         game[j].owner = !game[j].owner;
-      game[j].prio = rnd ((energy ? -1 : 0) * maxp, maxp);
+      game[j].prio = rnd_mpfr ((energy ? -1 : 0) * *maxp, *maxp);
     }
 
-    size_t attempts = 0;
-    size_t actual_edges = options.count ("outdegree") ? outdegree * size : edges;
-    for (size_t j = 0; j < actual_edges; ++j) {
-      size_t from, to;
+    long attempts = 0;
+    long actual_edges = options.count ("outdegree") ? outdegree * size : edges;
+    for (long j = 0; j < actual_edges; ++j) {
+      long from, to;
       if (options.count ("outdegree"))
         from = j / outdegree;
       attempts = size * size;
@@ -241,8 +275,8 @@ int main (int argc, char** argv) {
     std::ostream out (buf);
     out << "parity " << size << ";\n";
 
-    for (size_t j = 0; j < size; ++j) {
-      out << j << " " << game[j].prio << " " << game[j].owner << " ";
+    for (long j = 0; j < size; ++j) {
+      out << j << " " << game[j].prio.toString ("%34.0RNf") << " " << game[j].owner << " ";
       bool first = true;
       for (auto&& s : game[j].succ) {
         out << (first ? "" : ",") << s;

@@ -224,11 +224,12 @@ int main (int argc, char** argv) {
     }
 
     // Generate game
-    struct {
+    struct vert {
         int32_t owner;
         mpreal prio;
         std::set<long> succ;
-    } game[*size];
+    };
+    auto game = new vert[*size];
 
     uint8_t has_players = 0b00;
     for (long j = 0; j < size; ++j) {
@@ -284,6 +285,7 @@ int main (int argc, char** argv) {
       }
       out << ";\n";
     }
+    delete[] game;
   }
   std::cerr << "\n";
 }

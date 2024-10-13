@@ -226,7 +226,6 @@ int main (int argc, char** argv) {
     // Generate game
     struct vert {
         int32_t owner;
-        mpreal prio;
         std::set<long> succ;
     };
     auto game = new vert[*size];
@@ -237,13 +236,12 @@ int main (int argc, char** argv) {
       has_players |= 1 << game[j].owner;
       if (j == size - 1 and has_players != 0b11) // force that the two players are there
         game[j].owner = !game[j].owner;
-      game[j].prio = rnd_mpfr ((energy ? -1 : 0) * *maxp, *maxp);
     }
 
     long attempts = 0;
     long actual_edges = options.count ("outdegree") ? outdegree * size : edges;
     for (long j = 0; j < actual_edges; ++j) {
-      long from, to;
+      long from = 0, to = 0;
       if (options.count ("outdegree"))
         from = j / outdegree;
       attempts = size * size;
@@ -277,7 +275,7 @@ int main (int argc, char** argv) {
     out << "parity " << size << ";\n";
 
     for (long j = 0; j < size; ++j) {
-      out << j << " " << game[j].prio.toString ("%34.0RNf") << " " << game[j].owner << " ";
+      out << j << " " << rnd_mpfr ((energy ? -1 : 0) * *maxp, *maxp).toString ("%.0RNf") << " " << game[j].owner << " ";
       bool first = true;
       for (auto&& s : game[j].succ) {
         out << (first ? "" : ",") << s;

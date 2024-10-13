@@ -152,7 +152,7 @@ int main (int argc, char** argv) {
     seed ("seed", std::to_string (std::random_device () ()));
   mpfr_math_expr maxp ("maxp", "size");
 
-  bool energy = false, bipartite = true;
+  bool energy = false, on_edge = false, bipartite = true;
 
   opts.custom_help ("[OPTIONS...] [FILE-PATTERN]\n"
                     "FILE-PATTERN is a filename that may contain placeholders that correspond\n"
@@ -182,6 +182,9 @@ int main (int argc, char** argv) {
 
     ("energy", "Energy game, weight can be negative (default: " + std::to_string (energy) + ")",
      cxxopts::value (energy))
+
+    ("on-edge", "Weight are on edges (default: " + std::to_string (on_edge) + ")",
+     cxxopts::value (on_edge))
 
     ("bipartite", "Force the generate graph to be bipartite (default: " + std::to_string (bipartite) + ")",
      cxxopts::value (bipartite));
@@ -272,13 +275,24 @@ int main (int argc, char** argv) {
     }
 
     std::ostream out (buf);
-    out << "parity " << size << ";\n";
+    if (on_edge)
+      out << "energy " << size << ";\n";
+    else
+      out << "parity " << size << ";\n";
 
     for (long j = 0; j < size; ++j) {
-      out << j << " " << rnd_mpfr ((energy ? -1 : 0) * *maxp, *maxp).toString ("%.0RNf") << " " << game[j].owner << " ";
+
+      out << j << " ";
+      if (not on_edge)
+        out << rnd_mpfr ((energy ? -1 : 0) * *maxp, *maxp).toString ("%.0RNf") << " ";
+
+      out << game[j].owner << " ";
+
       bool first = true;
       for (auto&& s : game[j].succ) {
         out << (first ? "" : ",") << s;
+        if (on_edge)
+          out << " " << rnd_mpfr ((energy ? -1 : 0) * *maxp, *maxp).toString ("%.0RNf");
         first = false;
       }
       out << ";\n";

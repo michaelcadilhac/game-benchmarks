@@ -1,0 +1,44 @@
+* A collection of games for parity game and energy game solvers
+
+** Parity games
+
+We rely on the yearly competition SYNTCOMP24 for our benchmarks, which has a
+competition track for parity game solvers, and on the benchmark suite of
+Keiren[fn:1].  
+
+We subdivide the approximately 1000 benchmarks into two categories: synthetic
+games (crafted by researchers, usually with the intent of being hard for certain
+parity game solving approaches) and organic games (the natural counterpart of
+the synthetic games).  We note that the synthetic games include the ``two
+counter games'' examples, in which Tangle Learning and Recursive Tangle Learning
+show an exponential behaviour. It also contains the family of examples by
+Friedmann[fn:2], exponential for Optimal Strategy Improvement.  The organic
+games are essentially the ones provided by Keiren[fn:1], see therein for their
+origin.
+
+** Energy games
+
+We do not provide energy games in this repository, as they amount to more than 50GB of data.
+
+A script is provided to generate all the benchmarks, if desired.  These games
+are randomly generated, but the random generator seed is fixed, so the files
+produced will be exactly the same for everyone.
+
+To generate the missing energy games, run:
+
+#+begin_src shell
+  $ cd ~/src/game-benchmarks/tools
+  $ make                           # This will take about 5 minutes
+  g++ -std=c++20 -Wall -O3 -march=native random-game-generator.cc  -lm -lmpfr -lgmp   -o random-game-generator
+  $ cd ../energy-games
+  $ ./generate-energy-games.sh     # This will take about 30 minutes and generate 50 GB of games
+#+end_src
+
+* Footnotes
+[fn:2] Friedmann, O.: Exponential Lower Bounds for Solving Infinitary Payoff Games
+and Linear Programs. Ph.D. thesis, Ludwig Maximilians University Munich (2011),
+http://edoc.ub.uni-muenchen.de/13294/ 
+
+[fn:1] Keiren, J.J.A.: Benchmarks for parity games. In: Dastani, M., Sirjani,
+M. (eds.)  Fundamentals of Software Engineering. pp. 127–142. Springer
+International Publishing, Cham (2015).

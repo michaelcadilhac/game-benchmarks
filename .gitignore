@@ -1,3 +1,14 @@
 tools/a.out
 tools/random-game-generator
 tools/friedmann-switch-best
+README.org~
+energy-games/dense-high/
+energy-games/dense-low/
+energy-games/friedmann-perturbed/
+energy-games/sparse-high/
+energy-games/sparse-low/
+parity-games/friedmann_small/
+results/
+tools/a
+tools/a.cc
+tools/a.cc~
